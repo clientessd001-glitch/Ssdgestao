@@ -1,1 +1,1283 @@
-a
+```html
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>SSD Soluções - Gestor de Clientes & Vencimentos</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Fonte Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    * {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      background-color: #0b1120;
+      color: #f8fafc;
+    }
+
+    /* Ocultar barra de rolagem nas abas horizontais */
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+
+    /* Animação Shake para código PIN incorreto */
+    @keyframes shakePin {
+      0%, 100% { transform: translateX(0); }
+      20%, 60% { transform: translateX(-8px); }
+      40%, 80% { transform: translateX(8px); }
+    }
+    .animate-shake {
+      animation: shakePin 0.35s ease-in-out;
+    }
+
+    /* Estilos otimizados para geração de relatório em PDF (window.print) */
+    @media print {
+      body {
+        background-color: #ffffff !important;
+        color: #0f172a !important;
+        padding: 0 !important;
+      }
+      header,
+      #lockScreen,
+      #alertBanner,
+      #controlsSection,
+      #fabAddBtn,
+      #toastContainer,
+      .no-print {
+        display: none !important;
+      }
+      #printHeader {
+        display: block !important;
+        margin-bottom: 16px;
+        border-bottom: 2px solid #cbd5e1;
+        padding-bottom: 8px;
+      }
+      .stat-card {
+        background-color: #f8fafc !important;
+        border: 1px solid #cbd5e1 !important;
+        color: #0f172a !important;
+      }
+      .stat-card p {
+        color: #475569 !important;
+      }
+      .client-card {
+        background-color: #ffffff !important;
+        border: 1px solid #cbd5e1 !important;
+        color: #0f172a !important;
+        break-inside: avoid;
+        page-break-inside: avoid;
+        box-shadow: none !important;
+      }
+      .client-card * {
+        color: #0f172a !important;
+      }
+    }
+  </style>
+</head>
+<body class="min-h-screen pb-24 antialiased selection:bg-blue-500 selection:text-white">
+
+  <!-- Cabeçalho Exclusivo para Impressão / PDF -->
+  <div id="printHeader" class="hidden px-4 pt-4">
+    <h1 class="text-xl font-extrabold text-slate-900">SSD Soluções - Relatório de Clientes & Vencimentos</h1>
+    <p id="printDate" class="text-xs text-slate-600 mt-1"></p>
+  </div>
+
+  <!-- 0. Tela de Bloqueio / Login por Código de Acesso (PIN) -->
+  <div id="lockScreen" class="fixed inset-0 z-50 bg-slate-950/98 backdrop-blur-xl flex flex-col items-center justify-center p-5 select-none">
+    <div class="w-full max-w-xs space-y-6 text-center">
+      <!-- Identidade Visual -->
+      <div class="space-y-2">
+        <div class="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-blue-600 to-blue-900 border border-blue-400/30 shadow-lg shadow-blue-950/60 flex items-center justify-center">
+          <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+          </svg>
+        </div>
+        <h2 class="text-lg font-extrabold text-white tracking-tight">SSD Soluções</h2>
+        <p class="text-xs text-slate-400">Digite seu código de acesso para desbloquear</p>
+      </div>
+
+      <!-- Indicador Visual de Pontos + Input Oculto/Alfanumérico -->
+      <div id="pinDisplayWrapper" class="space-y-2.5">
+        <div id="pinDotsContainer" class="flex items-center justify-center gap-3 py-2">
+          <span class="pin-dot w-3.5 h-3.5 rounded-full border-2 border-slate-600 bg-transparent transition-all duration-150"></span>
+          <span class="pin-dot w-3.5 h-3.5 rounded-full border-2 border-slate-600 bg-transparent transition-all duration-150"></span>
+          <span class="pin-dot w-3.5 h-3.5 rounded-full border-2 border-slate-600 bg-transparent transition-all duration-150"></span>
+          <span class="pin-dot w-3.5 h-3.5 rounded-full border-2 border-slate-600 bg-transparent transition-all duration-150"></span>
+        </div>
+
+        <input
+          type="password"
+          id="pinInput"
+          maxlength="12"
+          autocomplete="off"
+          placeholder="••••"
+          oninput="handlePinInput(this.value)"
+          onkeydown="if(event.key === 'Enter') verifyPinAccess()"
+          class="w-full text-center tracking-[0.4em] font-extrabold text-base bg-slate-900/90 border border-slate-800 focus:border-blue-500 rounded-xl px-4 py-2.5 text-white placeholder-slate-600 outline-none transition"
+        />
+
+        <p id="pinErrorMsg" class="text-xs font-semibold text-rose-400 min-h-[18px]"></p>
+      </div>
+
+      <!-- Teclado Numérico Rápido (Estilo Celular) -->
+      <div class="grid grid-cols-3 gap-2.5">
+        <button type="button" onclick="appendPinDigit('1')" class="h-14 rounded-2xl bg-slate-900 hover:bg-slate-800 active:scale-95 active:bg-blue-600/30 border border-slate-800 text-xl font-bold text-white transition">1</button>
+        <button type="button" onclick="appendPinDigit('2')" class="h-14 rounded-2xl bg-slate-900 hover:bg-slate-800 active:scale-95 active:bg-blue-600/30 border border-slate-800 text-xl font-bold text-white transition">2</button>
+        <button type="button" onclick="appendPinDigit('3')" class="h-14 rounded-2xl bg-slate-900 hover:bg-slate-800 active:scale-95 active:bg-blue-600/30 border border-slate-800 text-xl font-bold text-white transition">3</button>
+
+        <button type="button" onclick="appendPinDigit('4')" class="h-14 rounded-2xl bg-slate-900 hover:bg-slate-800 active:scale-95 active:bg-blue-600/30 border border-slate-800 text-xl font-bold text-white transition">4</button>
+        <button type="button" onclick="appendPinDigit('5')" class="h-14 rounded-2xl bg-slate-900 hover:bg-slate-800 active:scale-95 active:bg-blue-600/30 border border-slate-800 text-xl font-bold text-white transition">5</button>
+        <button type="button" onclick="appendPinDigit('6')" class="h-14 rounded-2xl bg-slate-900 hover:bg-slate-800 active:scale-95 active:bg-blue-600/30 border border-slate-800 text-xl font-bold text-white transition">6</button>
+
+        <button type="button" onclick="appendPinDigit('7')" class="h-14 rounded-2xl bg-slate-900 hover:bg-slate-800 active:scale-95 active:bg-blue-600/30 border border-slate-800 text-xl font-bold text-white transition">7</button>
+        <button type="button" onclick="appendPinDigit('8')" class="h-14 rounded-2xl bg-slate-900 hover:bg-slate-800 active:scale-95 active:bg-blue-600/30 border border-slate-800 text-xl font-bold text-white transition">8</button>
+        <button type="button" onclick="appendPinDigit('9')" class="h-14 rounded-2xl bg-slate-900 hover:bg-slate-800 active:scale-95 active:bg-blue-600/30 border border-slate-800 text-xl font-bold text-white transition">9</button>
+
+        <button type="button" onclick="backspacePinDigit()" aria-label="Apagar" class="h-14 rounded-2xl bg-slate-900/70 hover:bg-slate-800 active:scale-95 border border-slate-800/80 text-base font-bold text-slate-300 flex items-center justify-center transition">⌫</button>
+        <button type="button" onclick="appendPinDigit('0')" class="h-14 rounded-2xl bg-slate-900 hover:bg-slate-800 active:scale-95 active:bg-blue-600/30 border border-slate-800 text-xl font-bold text-white transition">0</button>
+        <button type="button" onclick="verifyPinAccess()" aria-label="Confirmar" class="h-14 rounded-2xl bg-blue-600 hover:bg-blue-500 active:scale-95 border border-blue-400/30 text-sm font-extrabold text-white shadow-lg shadow-blue-900/50 transition">OK ✓</button>
+      </div>
+
+      <!-- Dica discreta apenas quando estiver usando o código padrão inicial -->
+      <p id="defaultPinHint" class="hidden text-[11px] text-slate-500">
+        Código padrão inicial: <strong class="text-slate-300">8598</strong> (altere em ⚙️ Dados)
+      </p>
+    </div>
+  </div>
+
+  <!-- 1. Cabeçalho Fixo -->
+  <header class="sticky top-0 z-40 bg-gradient-to-r from-blue-950 via-slate-900 to-slate-950 border-b border-slate-800 px-4 py-3.5 shadow-lg">
+    <div class="max-w-3xl mx-auto flex items-center justify-between gap-2">
+      <div class="flex items-center gap-2.5 min-w-0">
+        <div class="w-9 h-9 rounded-xl bg-blue-600/20 border border-blue-500/40 flex items-center justify-center shrink-0">
+          <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+          </svg>
+        </div>
+        <div class="truncate">
+          <h1 class="text-sm sm:text-base font-extrabold tracking-tight text-white truncate">
+            SSD Soluções - Gestor de Clientes & Vencimentos
+          </h1>
+          <p class="text-[11px] text-blue-300/80 font-medium truncate">Controle de Planos, Chip & Cobrança Rápida</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
+        <button onclick="lockAppNow()" title="Bloquear Aplicativo" class="px-2.5 py-2 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 active:scale-95 border border-rose-500/30 text-xs font-semibold text-rose-200 flex items-center gap-1 transition">
+          <span>🔒</span>
+          <span class="hidden sm:inline">Bloquear Agora</span>
+        </button>
+        <button onclick="exportPDF()" class="px-2.5 sm:px-3 py-2 rounded-xl bg-slate-800/90 hover:bg-slate-700 active:scale-95 border border-slate-700 text-xs font-semibold text-slate-200 flex items-center gap-1.5 transition">
+          <span>📄</span>
+          <span>PDF</span>
+        </button>
+        <button onclick="openSettingsModal()" class="px-2.5 sm:px-3 py-2 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 active:scale-95 border border-blue-500/40 text-xs font-semibold text-blue-200 flex items-center gap-1.5 transition">
+          <span>⚙️</span>
+          <span>Dados</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- 2. Banner de Alerta Superior Dinâmico -->
+  <div id="alertBanner" class="hidden bg-gradient-to-r from-red-900 via-red-800 to-amber-800 border-b border-red-500/40 px-4 py-2.5 text-center shadow-md">
+    <div class="max-w-3xl mx-auto flex items-center justify-center gap-2 text-xs sm:text-sm font-semibold text-white">
+      <span class="animate-pulse">🚨</span>
+      <span id="alertBannerText">Atenção: Existem clientes vencidos ou vencendo hoje!</span>
+    </div>
+  </div>
+
+  <main class="max-w-3xl mx-auto px-4 pt-4 space-y-4">
+
+    <!-- 3. Dashboard com 4 Cards -->
+    <section class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+      <div class="stat-card bg-slate-900/90 border border-slate-800 rounded-2xl p-3.5 shadow-sm">
+        <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Previsão Mensal</p>
+        <p id="statTotal" class="text-lg sm:text-xl font-extrabold text-blue-400 mt-1">R$ 0,00</p>
+      </div>
+
+      <div class="stat-card bg-slate-900/90 border border-slate-800 rounded-2xl p-3.5 shadow-sm">
+        <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Clientes Ativos</p>
+        <p id="statCount" class="text-lg sm:text-xl font-extrabold text-emerald-400 mt-1">0</p>
+      </div>
+
+      <div class="stat-card bg-slate-900/90 border border-slate-800 rounded-2xl p-3.5 shadow-sm">
+        <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Vencidos / Hoje</p>
+        <p id="statUrgent" class="text-lg sm:text-xl font-extrabold text-rose-400 mt-1">0</p>
+      </div>
+
+      <div class="stat-card bg-slate-900/90 border border-slate-800 rounded-2xl p-3.5 shadow-sm">
+        <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Próximos 3 Dias</p>
+        <p id="statSoon" class="text-lg sm:text-xl font-extrabold text-amber-400 mt-1">0</p>
+      </div>
+    </section>
+
+    <!-- 4. Barra de Busca e Abas de Filtro -->
+    <section id="controlsSection" class="space-y-2.5">
+      <div class="relative">
+        <span class="absolute inset-y-0 left-3.5 flex items-center text-slate-400 pointer-events-none">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z" />
+          </svg>
+        </span>
+        <input
+          type="text"
+          id="searchInput"
+          oninput="renderClients()"
+          placeholder="Buscar por nome, WhatsApp, linha ou plano..."
+          class="w-full bg-slate-900 border border-slate-800 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 rounded-xl pl-10 pr-4 py-3 text-sm text-slate-100 placeholder-slate-500 outline-none transition"
+        />
+      </div>
+
+      <div class="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1" id="filterTabs">
+        <button onclick="setFilter('all', this)" data-filter="all" class="filter-tab active px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap bg-blue-600 text-white border border-blue-500 transition">
+          Todos (<span id="count-all">0</span>)
+        </button>
+        <button onclick="setFilter('overdue', this)" data-filter="overdue" class="filter-tab px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap bg-slate-900 text-slate-300 border border-slate-800 hover:border-slate-700 transition">
+          🚨 Vencidos (<span id="count-overdue">0</span>)
+        </button>
+        <button onclick="setFilter('today', this)" data-filter="today" class="filter-tab px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap bg-slate-900 text-slate-300 border border-slate-800 hover:border-slate-700 transition">
+          ⏰ Vence Hoje (<span id="count-today">0</span>)
+        </button>
+        <button onclick="setFilter('soon', this)" data-filter="soon" class="filter-tab px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap bg-slate-900 text-slate-300 border border-slate-800 hover:border-slate-700 transition">
+          📅 Próx. 3 Dias (<span id="count-soon">0</span>)
+        </button>
+        <button onclick="setFilter('ok', this)" data-filter="ok" class="filter-tab px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap bg-slate-900 text-slate-300 border border-slate-800 hover:border-slate-700 transition">
+          ✅ Em Dia (<span id="count-ok">0</span>)
+        </button>
+      </div>
+    </section>
+
+    <!-- 5 & 6. Lista de Clientes -->
+    <section id="clientList" class="space-y-3"></section>
+
+  </main>
+
+  <!-- Botão Flutuante (FAB) Novo Cliente -->
+  <button
+    id="fabAddBtn"
+    onclick="openClientModal()"
+    class="fixed bottom-5 right-5 z-30 bg-blue-600 hover:bg-blue-500 active:scale-95 text-white font-bold text-sm px-5 py-3.5 rounded-2xl shadow-xl shadow-blue-900/50 border border-blue-400/30 flex items-center gap-2 transition"
+  >
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+    </svg>
+    <span>Novo Cliente</span>
+  </button>
+
+  <!-- 7. Modal de Cadastro / Edição de Cliente -->
+  <div id="clientModal" class="fixed inset-0 z-50 hidden bg-black/80 backdrop-blur-sm items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-5 shadow-2xl">
+      <div class="flex items-center justify-between pb-3 mb-4 border-b border-slate-800">
+        <h2 id="clientModalTitle" class="text-base font-extrabold text-white">Novo Cliente SSD Soluções</h2>
+        <button onclick="closeModal('clientModal')" class="w-8 h-8 rounded-lg bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center">✕</button>
+      </div>
+
+      <form id="clientForm" onsubmit="saveClient(event)" class="space-y-3.5">
+        <input type="hidden" id="clientId" />
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 mb-1">Nome Completo *</label>
+          <input type="text" id="cName" required placeholder="Ex: Carlos Eduardo Lima" class="w-full bg-slate-950 border border-slate-800 focus:border-blue-500 rounded-xl px-3.5 py-2.5 text-sm text-white outline-none" />
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-400 mb-1">WhatsApp (com DDD) *</label>
+            <input type="tel" id="cPhone" required placeholder="85999998888" class="w-full bg-slate-950 border border-slate-800 focus:border-blue-500 rounded-xl px-3.5 py-2.5 text-sm text-white outline-none" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-400 mb-1">Nº da Linha / Chip / ID</label>
+            <input type="text" id="cLine" placeholder="Ex: (85) 98765-4321" class="w-full bg-slate-950 border border-slate-800 focus:border-blue-500 rounded-xl px-3.5 py-2.5 text-sm text-white outline-none" />
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-blue-300 mb-1">Atalho de Planos SSD Soluções</label>
+          <select id="cPlanPreset" onchange="applyPlanPreset()" class="w-full bg-slate-950 border border-blue-500/40 focus:border-blue-500 rounded-xl px-3.5 py-2.5 text-sm text-white outline-none">
+            <option value="">-- Selecione um plano rápido --</option>
+            <option value="TIM 65GB (Apps Ilimitados)|64.99">TIM 65GB (Apps Ilimitados) — R$ 64,99</option>
+            <option value="Vivo 5000GB + Ligações Ilimitadas|139.99">Vivo 5000GB + Ligações Ilimitadas — R$ 139,99</option>
+            <option value="Internet Residencial FWA|99.90">Internet Residencial FWA — R$ 99,90</option>
+            <option value="custom">Outro Serviço / Personalizado</option>
+          </select>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div class="sm:col-span-2">
+            <label class="block text-xs font-semibold text-slate-400 mb-1">Descrição do Serviço *</label>
+            <input type="text" id="cService" required placeholder="Ex: TIM 65GB (Apps Ilimitados)" class="w-full bg-slate-950 border border-slate-800 focus:border-blue-500 rounded-xl px-3.5 py-2.5 text-sm text-white outline-none" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-400 mb-1">Valor Mensal (R$) *</label>
+            <input type="number" step="0.01" min="0" id="cPrice" required placeholder="64.99" class="w-full bg-slate-950 border border-slate-800 focus:border-blue-500 rounded-xl px-3.5 py-2.5 text-sm text-white outline-none" />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-400 mb-1">Próximo Vencimento *</label>
+            <input type="date" id="cDueDate" required class="w-full bg-slate-950 border border-slate-800 focus:border-blue-500 rounded-xl px-3.5 py-2.5 text-sm text-white outline-none" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-400 mb-1">Ciclo de Renovação</label>
+            <select id="cCycle" class="w-full bg-slate-950 border border-slate-800 focus:border-blue-500 rounded-xl px-3.5 py-2.5 text-sm text-white outline-none">
+              <option value="monthly">Mensal (Mesmo dia)</option>
+              <option value="30days">A cada 30 dias corridos</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 mb-1">Observações (ICCID, CPF, E-mail, Roteador...)</label>
+          <textarea id="cNotes" rows="2" placeholder="Informações extras para suporte..." class="w-full bg-slate-950 border border-slate-800 focus:border-blue-500 rounded-xl px-3.5 py-2.5 text-sm text-white outline-none"></textarea>
+        </div>
+
+        <div class="flex items-center gap-2.5 pt-2">
+          <button type="button" onclick="closeModal('clientModal')" class="flex-1 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-sm font-bold text-slate-300 transition">
+            Cancelar
+          </button>
+          <button type="submit" class="flex-1 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-sm font-bold text-white shadow-lg shadow-emerald-900/40 transition">
+            💾 Salvar Cliente
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 8. Modal de Configurações, Backup & Notificação Android -->
+  <div id="settingsModal" class="fixed inset-0 z-50 hidden bg-black/80 backdrop-blur-sm items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-5 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+        <h2 class="text-base font-extrabold text-white">Configurações, Backup & Android</h2>
+        <button onclick="closeModal('settingsModal')" class="w-8 h-8 rounded-lg bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center">✕</button>
+      </div>
+
+      <div class="space-y-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 mb-1">Chave Pix para Cobrança</label>
+          <input type="text" id="cfgPix" class="w-full bg-slate-950 border border-slate-800 focus:border-blue-500 rounded-xl px-3.5 py-2.5 text-sm text-white outline-none" />
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 mb-1">Nome do Recebedor / Empresa</label>
+          <input type="text" id="cfgCompany" class="w-full bg-slate-950 border border-slate-800 focus:border-blue-500 rounded-xl px-3.5 py-2.5 text-sm text-white outline-none" />
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 mb-1">URL Firebase Realtime DB (Opcional - Sync REST)</label>
+          <input type="url" id="cfgFirebaseUrl" placeholder="https://seu-projeto-default-rtdb.firebaseio.com" class="w-full bg-slate-950 border border-slate-800 focus:border-blue-500 rounded-xl px-3.5 py-2.5 text-sm text-white outline-none" />
+          <p class="text-[11px] text-slate-500 mt-1">Sincroniza automaticamente em <code class="text-slate-300">/ssd_clientes.json</code> ao salvar.</p>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-amber-300 mb-1">Alterar Código de Acesso (PIN)</label>
+          <input type="password" id="cfgPin" maxlength="12" placeholder="Digite o novo PIN ou senha" class="w-full bg-slate-950 border border-amber-500/30 focus:border-amber-400 rounded-xl px-3.5 py-2.5 text-sm text-white outline-none" />
+          <p class="text-[11px] text-slate-500 mt-1">Mínimo de 4 caracteres (numérico ou alfanumérico).</p>
+        </div>
+
+        <button onclick="saveSettings()" class="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-sm font-bold text-white transition">
+          💾 Salvar Configurações
+        </button>
+      </div>
+
+      <div class="border-t border-slate-800 pt-4 space-y-2.5">
+        <p class="text-xs font-bold uppercase tracking-wider text-slate-400">Backup Offline (JSON)</p>
+        <div class="grid grid-cols-2 gap-2.5">
+          <button onclick="exportBackup()" class="py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-bold text-slate-200 flex items-center justify-center gap-1.5 transition">
+            <span>⬇️</span>
+            <span>Exportar JSON</span>
+          </button>
+          <label class="py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-bold text-slate-200 flex items-center justify-center gap-1.5 cursor-pointer transition">
+            <span>⬆️</span>
+            <span>Importar JSON</span>
+            <input type="file" accept=".json" onchange="importBackup(event)" class="hidden" />
+          </label>
+        </div>
+      </div>
+
+      <div class="border-t border-slate-800 pt-4 space-y-2.5">
+        <p class="text-xs font-bold uppercase tracking-wider text-slate-400">Integração Nativa Android WebView</p>
+        <button onclick="triggerNotificationCheck(true)" class="w-full py-3 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-xs font-bold text-emerald-300 flex items-center justify-center gap-2 transition">
+          <span>🔔</span>
+          <span>Testar Notificação Android</span>
+        </button>
+        <button onclick="resetDemoData()" class="w-full py-2 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 text-[11px] font-medium text-slate-400 transition">
+          🔄 Restaurar Clientes de Exemplo (Demo)
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de Confirmação Customizado (Substitui confirm/alert nativos) -->
+  <div id="confirmModal" class="fixed inset-0 z-50 hidden bg-black/80 backdrop-blur-sm items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-sm p-5 shadow-2xl space-y-4">
+      <div class="space-y-1.5">
+        <h3 id="confirmTitle" class="text-base font-extrabold text-white">Confirmar Ação</h3>
+        <p id="confirmMessage" class="text-sm text-slate-300 leading-relaxed"></p>
+      </div>
+      <div class="flex items-center gap-2.5 pt-1">
+        <button id="confirmCancelBtn" class="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-300 transition">
+          Cancelar
+        </button>
+        <button id="confirmOkBtn" class="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-xs font-bold text-white transition">
+          Confirmar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Container de Notificações Toast -->
+  <div id="toastContainer" class="fixed top-16 right-4 left-4 sm:left-auto sm:w-96 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+  <script>
+    // Chaves de armazenamento localStorage e sessionStorage
+    const STORAGE_KEY = 'ssd_solucoes_clients_v2';
+    const SETTINGS_KEY = 'ssd_solucoes_settings_v2';
+    const PIN_STORAGE_KEY = 'ssd_solucoes_pin_v1';
+    const SESSION_UNLOCK_KEY = 'ssd_solucoes_unlocked_session_v1';
+    const DEFAULT_PIN = '8598';
+
+    // Configurações padrão
+    const DEFAULT_SETTINGS = {
+      pix: '85991839113',
+      company: 'SSD Soluções (Josimar Sousa)',
+      firebaseUrl: ''
+    };
+
+    let clients = [];
+    let settings = { ...DEFAULT_SETTINGS };
+    let currentFilter = 'all';
+    let currentPinBuffer = '';
+    let appInitialized = false;
+
+    // Gerenciamento do Código de Acesso (PIN)
+    function getStoredPin() {
+      const saved = localStorage.getItem(PIN_STORAGE_KEY);
+      if (!saved) {
+        localStorage.setItem(PIN_STORAGE_KEY, DEFAULT_PIN);
+        return DEFAULT_PIN;
+      }
+      return saved;
+    }
+
+    function updatePinDots() {
+      const storedLen = Math.max(4, getStoredPin().length);
+      const container = document.getElementById('pinDotsContainer');
+      const len = currentPinBuffer.length;
+      const dotsCount = Math.max(storedLen, len);
+
+      let html = '';
+      for (let i = 0; i < dotsCount; i++) {
+        const filled = i < len;
+        html += `<span class="w-3.5 h-3.5 rounded-full border-2 transition-all duration-150 ${
+          filled
+            ? 'border-blue-400 bg-blue-400 scale-110 shadow-sm shadow-blue-400/60'
+            : 'border-slate-600 bg-transparent'
+        }"></span>`;
+      }
+      container.innerHTML = html;
+      document.getElementById('pinInput').value = currentPinBuffer;
+    }
+
+    function appendPinDigit(digit) {
+      if (currentPinBuffer.length >= 12) return;
+      document.getElementById('pinErrorMsg').textContent = '';
+      currentPinBuffer += digit;
+      updatePinDots();
+
+      // Desbloqueio automático quando atingir o tamanho exato do PIN salvo (se o PIN bater)
+      const targetPin = getStoredPin();
+      if (currentPinBuffer.length === targetPin.length && currentPinBuffer === targetPin) {
+        setTimeout(verifyPinAccess, 120);
+      }
+    }
+
+    function backspacePinDigit() {
+      document.getElementById('pinErrorMsg').textContent = '';
+      currentPinBuffer = currentPinBuffer.slice(0, -1);
+      updatePinDots();
+    }
+
+    function handlePinInput(val) {
+      document.getElementById('pinErrorMsg').textContent = '';
+      currentPinBuffer = val.slice(0, 12);
+      updatePinDots();
+
+      const targetPin = getStoredPin();
+      if (currentPinBuffer.length === targetPin.length && currentPinBuffer === targetPin) {
+        setTimeout(verifyPinAccess, 120);
+      }
+    }
+
+    function verifyPinAccess() {
+      const entered = currentPinBuffer.trim();
+      if (!entered) {
+        triggerPinError('Digite o código de acesso.');
+        return;
+      }
+
+      let isValid = false;
+
+      // Suporte opcional à validação nativa no Android WebView (SharedPreferences)
+      if (window.AndroidInterface && typeof window.AndroidInterface.verificarCodigo === 'function') {
+        try {
+          isValid = Boolean(window.AndroidInterface.verificarCodigo(entered));
+        } catch (err) {
+          console.warn('Fallback para verificação localStorage:', err);
+          isValid = entered === getStoredPin();
+        }
+      } else {
+        isValid = entered === getStoredPin();
+      }
+
+      if (isValid) {
+        sessionStorage.setItem(SESSION_UNLOCK_KEY, 'true');
+        unlockAppScreen();
+      } else {
+        triggerPinError('Código incorreto. Tente novamente.');
+      }
+    }
+
+    function triggerPinError(message) {
+      const wrapper = document.getElementById('pinDisplayWrapper');
+      const errorEl = document.getElementById('pinErrorMsg');
+      errorEl.textContent = message;
+      wrapper.classList.remove('animate-shake');
+      void wrapper.offsetWidth; // força reflow para reiniciar animação
+      wrapper.classList.add('animate-shake');
+
+      currentPinBuffer = '';
+      updatePinDots();
+    }
+
+    function unlockAppScreen() {
+      const lockEl = document.getElementById('lockScreen');
+      lockEl.classList.add('hidden');
+      currentPinBuffer = '';
+      updatePinDots();
+      startMainApp();
+    }
+
+    function lockAppNow() {
+      sessionStorage.removeItem(SESSION_UNLOCK_KEY);
+      currentPinBuffer = '';
+      document.getElementById('pinErrorMsg').textContent = '';
+      updatePinDots();
+      checkDefaultPinHint();
+      const lockEl = document.getElementById('lockScreen');
+      lockEl.classList.remove('hidden');
+      showToast('Aplicativo bloqueado com segurança.', 'info');
+    }
+
+    function checkDefaultPinHint() {
+      const hintEl = document.getElementById('defaultPinHint');
+      if (getStoredPin() === DEFAULT_PIN) {
+        hintEl.classList.remove('hidden');
+      } else {
+        hintEl.classList.add('hidden');
+      }
+    }
+
+    // Utilitário para gerar datas relativas ao dia atual (YYYY-MM-DD)
+    function getRelativeDateStr(offsetDays) {
+      const d = new Date();
+      d.setHours(12, 0, 0, 0);
+      d.setDate(d.getDate() + offsetDays);
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+
+    // Dados de exemplo pré-carregados na primeira abertura
+    function getInitialDemoClients() {
+      return [
+        {
+          id: 'demo_1',
+          name: 'Antônio Marcos Ferreira',
+          phone: '85998123456',
+          line: '(85) 99812-3456',
+          service: 'TIM 65GB (Apps Ilimitados)',
+          price: 64.99,
+          dueDate: getRelativeDateStr(-2), // Vencido há 2 dias
+          cycle: 'monthly',
+          notes: 'Chip enviado via Correios • ICCID final 4412'
+        },
+        {
+          id: 'demo_2',
+          name: 'Francisca Juliana Costa',
+          phone: '85987651122',
+          line: '(85) 98765-1122',
+          service: 'Vivo 5000GB + Ligações Ilimitadas',
+          price: 139.99,
+          dueDate: getRelativeDateStr(0), // Vence Hoje
+          cycle: 'monthly',
+          notes: 'Usa no roteador 4G da loja • Paga via Pix'
+        },
+        {
+          id: 'demo_3',
+          name: 'Roberto Nascimento Silva',
+          phone: '85991447788',
+          line: '(85) 99144-7788',
+          service: 'Internet Residencial FWA',
+          price: 99.90,
+          dueDate: getRelativeDateStr(2), // Vence em 2 dias (Próx. 3 Dias)
+          cycle: '30days',
+          notes: 'Modem Intelbras instalado na sala'
+    // Inicialização da aplicação com verificação de bloqueio
+    window.addEventListener('DOMContentLoaded', () => {
+      getStoredPin();
+      updatePinDots();
+      checkDefaultPinHint();
+
+      if (sessionStorage.getItem(SESSION_UNLOCK_KEY) === 'true') {
+        unlockAppScreen();
+      } else {
+        document.getElementById('lockScreen').classList.remove('hidden');
+      }
+    });
+
+    async function startMainApp() {
+      if (appInitialized) return;
+      appInitialized = true;
+      loadLocalState();
+      await syncFromFirebase();
+      renderClients();
+      // Checa notificações automaticamente ao desbloquear o app
+      setTimeout(() => triggerNotificationCheck(false), 600);
+    }
+
+    function loadLocalState() {
+      try {
+        const savedSettings = JSON.parse(localStorage.getItem(SETTINGS_KEY));
+        if (savedSettings) {
+          settings = { ...DEFAULT_SETTINGS, ...savedSettings };
+        }
+      } catch (e) {
+        console.warn('Erro ao ler configurações:', e);
+      }
+
+      document.getElementById('cfgPix').value = settings.pix;
+      document.getElementById('cfgCompany').value = settings.company;
+      document.getElementById('cfgFirebaseUrl').value = settings.firebaseUrl || '';
+      document.getElementById('cfgPin').value = getStoredPin();
+
+      try {
+        const rawClients = localStorage.getItem(STORAGE_KEY);
+        if (rawClients === null) {
+          clients = getInitialDemoClients();
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(clients));
+        } else {
+          clients = JSON.parse(rawClients) || [];
+        }
+      } catch (e) {
+        clients = getInitialDemoClients();
+      }
+    }
+
+    // Cálculo de diferença de dias entre hoje e o vencimento
+    function getDaysDiff(dueDateStr) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const [y, m, d] = dueDateStr.split('-').map(Number);
+      const due = new Date(y, m - 1, d);
+      due.setHours(0, 0, 0, 0);
+      return Math.round((due - today) / (1000 * 60 * 60 * 24));
+    }
+
+    function getStatusInfo(days) {
+      if (days < 0) {
+        const abs = Math.abs(days);
+        return {
+          key: 'overdue',
+          label: `Vencido há ${abs} ${abs === 1 ? 'dia' : 'dias'}`,
+          badgeClass: 'bg-rose-500/20 text-rose-300 border-rose-500/40',
+          borderClass: 'border-l-rose-500'
+        };
+      }
+      if (days === 0) {
+        return {
+          key: 'today',
+          label: 'Vence Hoje!',
+          badgeClass: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+          borderClass: 'border-l-amber-500'
+        };
+      }
+      if (days <= 3) {
+        return {
+          key: 'soon',
+          label: `Vence em ${days} ${days === 1 ? 'dia' : 'dias'}`,
+          badgeClass: 'bg-sky-500/20 text-sky-300 border-sky-500/40',
+          borderClass: 'border-l-sky-400'
+        };
+      }
+      return {
+        key: 'ok',
+        label: `Em dia (${days}d)`,
+        badgeClass: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+        borderClass: 'border-l-emerald-500'
+      };
+    }
+
+    function formatCurrency(val) {
+      return Number(val || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    }
+
+    function formatDateBR(dateStr) {
+      if (!dateStr) return '--/--/----';
+      const [y, m, d] = dateStr.split('-');
+      return `${d}/${m}/${y}`;
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str).replace(/[&<>"']/g, m => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+      }[m]));
+    }
+
+    // Troca de abas de filtro
+    function setFilter(filter, btnEl) {
+      currentFilter = filter;
+      document.querySelectorAll('.filter-tab').forEach(btn => {
+        btn.classList.remove('active', 'bg-blue-600', 'text-white', 'border-blue-500', 'font-bold');
+        btn.classList.add('bg-slate-900', 'text-slate-300', 'border-slate-800', 'font-semibold');
+      });
+      btnEl.classList.remove('bg-slate-900', 'text-slate-300', 'border-slate-800', 'font-semibold');
+      btnEl.classList.add('active', 'bg-blue-600', 'text-white', 'border-blue-500', 'font-bold');
+      renderClients();
+    }
+
+    // Renderização principal dos cards e métricas
+    function renderClients() {
+      const listEl = document.getElementById('clientList');
+      const query = document.getElementById('searchInput').value.toLowerCase().trim();
+
+      let totalMonthly = 0;
+      let countOverdue = 0;
+      let countToday = 0;
+      let countSoon = 0;
+      let countOk = 0;
+
+      // Ordena do mais urgente/atrasado para o mais distante
+      const sorted = [...clients].sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+
+      sorted.forEach(c => {
+        totalMonthly += Number(c.price || 0);
+        const days = getDaysDiff(c.dueDate);
+        if (days < 0) countOverdue++;
+        else if (days === 0) countToday++;
+        else if (days <= 3) countSoon++;
+        else countOk++;
+      });
+
+      const urgentTotal = countOverdue + countToday;
+
+      // Atualiza cards do dashboard
+      document.getElementById('statTotal').textContent = formatCurrency(totalMonthly);
+      document.getElementById('statCount').textContent = clients.length;
+      document.getElementById('statUrgent').textContent = urgentTotal;
+      document.getElementById('statSoon').textContent = countSoon;
+
+      // Atualiza contadores nas abas
+      document.getElementById('count-all').textContent = clients.length;
+      document.getElementById('count-overdue').textContent = countOverdue;
+      document.getElementById('count-today').textContent = countToday;
+      document.getElementById('count-soon').textContent = countSoon;
+      document.getElementById('count-ok').textContent = countOk;
+
+      // Atualiza banner de alerta superior
+      const banner = document.getElementById('alertBanner');
+      const bannerText = document.getElementById('alertBannerText');
+      if (urgentTotal > 0) {
+        banner.classList.remove('hidden');
+        bannerText.textContent = `Atenção: ${urgentTotal} cliente(s) com plano vencido (${countOverdue}) ou vencendo hoje (${countToday})!`;
+      } else {
+        banner.classList.add('hidden');
+      }
+
+      // Filtra por aba e busca em tempo real
+      const filtered = sorted.filter(c => {
+        const days = getDaysDiff(c.dueDate);
+        const statusKey = getStatusInfo(days).key;
+        const matchesTab = currentFilter === 'all' || currentFilter === statusKey;
+        const matchesSearch =
+          c.name.toLowerCase().includes(query) ||
+          c.phone.toLowerCase().includes(query) ||
+          (c.line && c.line.toLowerCase().includes(query)) ||
+          c.service.toLowerCase().includes(query);
+        return matchesTab && matchesSearch;
+      });
+
+      if (filtered.length === 0) {
+        listEl.innerHTML = `
+          <div class="bg-slate-900/60 border border-dashed border-slate-800 rounded-2xl p-8 text-center space-y-2">
+            <p class="text-sm font-bold text-slate-300">Nenhum cliente encontrado neste filtro</p>
+            <p class="text-xs text-slate-500">Altere o filtro acima ou toque em <strong class="text-blue-400">+ Novo Cliente</strong> para cadastrar.</p>
+          </div>
+        `;
+        return;
+      }
+
+      listEl.innerHTML = filtered.map(c => {
+        const days = getDaysDiff(c.dueDate);
+        const status = getStatusInfo(days);
+
+        return `
+          <article class="client-card bg-slate-900 border border-slate-800 border-l-4 ${status.borderClass} rounded-2xl p-4 shadow-md transition hover:border-slate-700">
+            <div class="flex items-start justify-between gap-2">
+              <div class="min-w-0">
+                <h3 class="text-base font-extrabold text-white truncate">${escapeHtml(c.name)}</h3>
+                <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-400 mt-1">
+                  <span>📱 ${escapeHtml(c.phone)}</span>
+                  ${c.line ? `<span>📡 Linha: <strong class="text-slate-200">${escapeHtml(c.line)}</strong></span>` : ''}
+                </div>
+              </div>
+              <span class="shrink-0 px-2.5 py-1 rounded-lg border text-[11px] font-bold uppercase tracking-wide ${status.badgeClass}">
+                ${status.label}
+              </span>
+            </div>
+
+            <div class="mt-3 pt-3 border-t border-slate-800/80 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+              <div>
+                <span class="text-slate-400">Plano / Serviço:</span>
+                <p class="font-bold text-slate-100 mt-0.5">${escapeHtml(c.service)}</p>
+              </div>
+              <div class="flex items-center justify-between sm:justify-end gap-4">
+                <div>
+                  <span class="text-slate-400 block">Valor Mensal</span>
+                  <span class="font-extrabold text-emerald-400 text-sm">${formatCurrency(c.price)}</span>
+                </div>
+                <div class="text-right">
+                  <span class="text-slate-400 block">Vencimento</span>
+                  <span class="font-bold text-slate-100 text-sm">${formatDateBR(c.dueDate)}</span>
+                </div>
+              </div>
+            </div>
+
+            ${c.notes ? `
+              <div class="mt-2.5 bg-slate-950/80 border border-slate-800/80 rounded-xl px-3 py-2 text-xs text-slate-300">
+                <span class="text-slate-500 font-semibold">Obs:</span> ${escapeHtml(c.notes)}
+              </div>
+            ` : ''}
+
+            <div class="no-print mt-3.5 pt-3 border-t border-slate-800/80 grid grid-cols-4 gap-2">
+              <button
+                onclick="sendWhatsApp('${c.id}')"
+                class="col-span-2 sm:col-span-1 py-2.5 px-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-slate-950 font-extrabold text-xs flex items-center justify-center gap-1.5 shadow-sm transition"
+              >
+                <span>💬</span>
+                <span>Cobrar</span>
+              </button>
+
+              <button
+                onclick="markAsPaid('${c.id}')"
+                class="col-span-2 sm:col-span-1 py-2.5 px-2 rounded-xl bg-blue-600 hover:bg-blue-500 active:scale-95 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition"
+              >
+                <span>✅</span>
+                <span>Pago</span>
+              </button>
+
+              <button
+                onclick="editClient('${c.id}')"
+                class="col-span-2 sm:col-span-1 py-2.5 px-2 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 font-semibold text-xs flex items-center justify-center gap-1 border border-slate-700 transition"
+              >
+                <span>✏️</span>
+                <span>Editar</span>
+              </button>
+
+              <button
+                onclick="deleteClient('${c.id}')"
+                class="col-span-2 sm:col-span-1 py-2.5 px-2 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 active:scale-95 text-rose-300 font-semibold text-xs flex items-center justify-center gap-1 border border-rose-500/30 transition"
+              >
+                <span>🗑️</span>
+                <span>Excluir</span>
+              </button>
+            </div>
+          </article>
+        `;
+      }).join('');
+    }
+
+    // Atalho de planos SSD Soluções no modal
+    function applyPlanPreset() {
+      const val = document.getElementById('cPlanPreset').value;
+      if (val && val !== 'custom') {
+        const [serviceName, price] = val.split('|');
+        document.getElementById('cService').value = serviceName;
+        document.getElementById('cPrice').value = price;
+      } else if (val === 'custom') {
+        document.getElementById('cService').value = '';
+        document.getElementById('cPrice').value = '';
+        document.getElementById('cService').focus();
+      }
+    }
+
+    // Controle de Modais
+    function openClientModal(client = null) {
+      document.getElementById('clientForm').reset();
+      if (client) {
+        document.getElementById('clientModalTitle').textContent = 'Editar Cliente SSD Soluções';
+        document.getElementById('clientId').value = client.id;
+        document.getElementById('cName').value = client.name;
+        document.getElementById('cPhone').value = client.phone;
+        document.getElementById('cLine').value = client.line || '';
+        document.getElementById('cService').value = client.service;
+        document.getElementById('cPrice').value = client.price;
+        document.getElementById('cDueDate').value = client.dueDate;
+        document.getElementById('cCycle').value = client.cycle || 'monthly';
+        document.getElementById('cNotes').value = client.notes || '';
+      } else {
+        document.getElementById('clientModalTitle').textContent = 'Novo Cliente SSD Soluções';
+        document.getElementById('clientId').value = '';
+        document.getElementById('cDueDate').value = getRelativeDateStr(30);
+      }
+      const modal = document.getElementById('clientModal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    function openSettingsModal() {
+      const modal = document.getElementById('settingsModal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    function closeModal(id) {
+      const modal = document.getElementById(id);
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    // Salvar (Criar ou Editar) Cliente
+    function saveClient(e) {
+      e.preventDefault();
+      const id = document.getElementById('clientId').value;
+      const clientObj = {
+        id: id || 'cli_' + Date.now(),
+        name: document.getElementById('cName').value.trim(),
+        phone: document.getElementById('cPhone').value.replace(/\D/g, ''),
+        line: document.getElementById('cLine').value.trim(),
+        service: document.getElementById('cService').value.trim(),
+        price: parseFloat(document.getElementById('cPrice').value) || 0,
+        dueDate: document.getElementById('cDueDate').value,
+        cycle: document.getElementById('cCycle').value,
+        notes: document.getElementById('cNotes').value.trim(),
+        updatedAt: new Date().toISOString()
+      };
+
+      if (id) {
+        const idx = clients.findIndex(item => item.id === id);
+        if (idx !== -1) clients[idx] = clientObj;
+        showToast('Cliente atualizado com sucesso!', 'success');
+      } else {
+        clients.push(clientObj);
+        showToast('Novo cliente cadastrado!', 'success');
+      }
+
+      persistClients();
+      closeModal('clientModal');
+      renderClients();
+    }
+
+    function editClient(id) {
+      const client = clients.find(c => c.id === id);
+      if (client) openClientModal(client);
+    }
+
+    // Modal de confirmação customizado (sem usar window.confirm)
+    function showConfirmDialog(title, message, onConfirm) {
+      const modal = document.getElementById('confirmModal');
+      document.getElementById('confirmTitle').textContent = title;
+      document.getElementById('confirmMessage').textContent = message;
+
+      const okBtn = document.getElementById('confirmOkBtn');
+      const cancelBtn = document.getElementById('confirmCancelBtn');
+
+      const cleanup = () => {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+      };
+
+      okBtn.onclick = () => {
+        cleanup();
+        onConfirm();
+      };
+      cancelBtn.onclick = cleanup;
+
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    function deleteClient(id) {
+      const client = clients.find(c => c.id === id);
+      if (!client) return;
+      showConfirmDialog(
+        'Excluir Cliente',
+        `Tem certeza que deseja remover "${client.name}" da sua lista?`,
+        () => {
+          clients = clients.filter(c => c.id !== id);
+          persistClients();
+          renderClients();
+          showToast('Cliente excluído.', 'info');
+        }
+      );
+    }
+
+    // Ação "Pago" -> Avança vencimento para o próximo mês ou +30 dias corridos
+    function markAsPaid(id) {
+      const client = clients.find(c => c.id === id);
+      if (!client) return;
+
+      const [y, m, d] = client.dueDate.split('-').map(Number);
+      const nextDate = new Date(y, m - 1, d, 12, 0, 0);
+
+      if (client.cycle === '30days') {
+        nextDate.setDate(nextDate.getDate() + 30);
+      } else {
+        // Mensal mantendo o mesmo dia do mês
+        const targetMonth = nextDate.getMonth() + 1;
+        nextDate.setMonth(targetMonth);
+        // Ajuste caso o mês seguinte não tenha dia 31 (ex: 31/01 -> 28/02)
+        if (nextDate.getMonth() !== targetMonth % 12) {
+          nextDate.setDate(0);
+        }
+      }
+
+      const nextStr = `${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, '0')}-${String(nextDate.getDate()).padStart(2, '0')}`;
+
+      showConfirmDialog(
+        'Confirmar Pagamento',
+        `Confirmar recebimento de ${formatCurrency(client.price)} de ${client.name}? O próximo vencimento será atualizado para ${formatDateBR(nextStr)}.`,
+        () => {
+          client.dueDate = nextStr;
+          client.updatedAt = new Date().toISOString();
+          persistClients();
+          renderClients();
+          showToast(`Pagamento registrado! Novo vencimento: ${formatDateBR(nextStr)}`, 'success');
+        }
+      );
+    }
+
+    // Ação "Cobrar" -> Abre WhatsApp com mensagem personalizada
+    function sendWhatsApp(id) {
+      const c = clients.find(item => item.id === id);
+      if (!c) return;
+
+      const days = getDaysDiff(c.dueDate);
+      let vencimentoTexto = `vence no dia *${formatDateBR(c.dueDate)}*`;
+      if (days === 0) vencimentoTexto = `*vence hoje (${formatDateBR(c.dueDate)})*`;
+      else if (days < 0) vencimentoTexto = `venceu no dia *${formatDateBR(c.dueDate)}*`;
+
+      const lineInfo = c.line ? `\n📡 *Linha/Chip:* ${c.line}` : '';
+
+      const mensagem =
+        `Olá, *${c.name}*! Tudo bem?\n\n` +
+        `Passando para lembrar da renovação do seu plano *${c.service}*${lineInfo}, que ${vencimentoTexto}.\n\n` +
+        `💰 *Valor:* ${formatCurrency(c.price)}\n` +
+        `🏢 *Recebedor:* ${settings.company}\n` +
+        `💠 *Chave Pix:* ${settings.pix}\n\n` +
+        `Assim que efetuar o pagamento, envie o comprovante por aqui para manter seu serviço ativo sem interrupções! 🚀`;
+
+      const cleanPhone = c.phone.replace(/\D/g, '');
+      const fullPhone = cleanPhone.startsWith('55') ? cleanPhone : '55' + cleanPhone;
+      const waUrl = `https://wa.me/${fullPhone}?text=${encodeURIComponent(mensagem)}`;
+
+      window.open(waUrl, '_blank');
+    }
+
+    // Persistência localStorage + Firebase Realtime DB REST PUT
+    function persistClients() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(clients));
+      if (settings.firebaseUrl) {
+        const endpoint = settings.firebaseUrl.replace(/\/$/, '') + '/ssd_clientes.json';
+        fetch(endpoint, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(clients)
+        }).catch(err => console.warn('Falha ao sincronizar PUT Firebase:', err));
+      }
+    }
+
+    async function syncFromFirebase() {
+      if (!settings.firebaseUrl) return;
+      try {
+        const endpoint = settings.firebaseUrl.replace(/\/$/, '') + '/ssd_clientes.json';
+        const res = await fetch(endpoint);
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          clients = data;
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(clients));
+          showToast('Dados sincronizados com Firebase!', 'info');
+        }
+      } catch (e) {
+        console.warn('Operando em modo offline localStorage:', e);
+      }
+    }
+
+    function saveSettings() {
+      const newPin = document.getElementById('cfgPin').value.trim();
+      if (newPin && newPin.length < 4) {
+        showToast('O código de acesso deve ter pelo menos 4 caracteres.', 'error');
+        return;
+      }
+
+      if (newPin) {
+        localStorage.setItem(PIN_STORAGE_KEY, newPin);
+        checkDefaultPinHint();
+      }
+
+      settings.pix = document.getElementById('cfgPix').value.trim() || DEFAULT_SETTINGS.pix;
+      settings.company = document.getElementById('cfgCompany').value.trim() || DEFAULT_SETTINGS.company;
+      settings.firebaseUrl = document.getElementById('cfgFirebaseUrl').value.trim();
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+      closeModal('settingsModal');
+      showToast('Configurações e código de acesso salvos!', 'success');
+      syncFromFirebase().then(renderClients);
+    }
+
+    // Exportar / Importar Backup JSON
+    function exportBackup() {
+      const payload = JSON.stringify(clients, null, 2);
+      const blob = new Blob([payload], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `ssd_solucoes_backup_${getRelativeDateStr(0)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      showToast('Backup JSON exportado!', 'success');
+    }
+
+    function importBackup(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const parsed = JSON.parse(e.target.result);
+          if (Array.isArray(parsed)) {
+            clients = parsed;
+            persistClients();
+            renderClients();
+            closeModal('settingsModal');
+            showToast(`${clients.length} cliente(s) importado(s) com sucesso!`, 'success');
+          } else {
+            showToast('Formato de arquivo JSON inválido.', 'error');
+          }
+        } catch (err) {
+          showToast('Erro ao ler o arquivo JSON.', 'error');
+        }
+        event.target.value = '';
+      };
+      reader.readAsText(file);
+    }
+
+    function resetDemoData() {
+      showConfirmDialog(
+        'Restaurar Exemplos',
+        'Isso substituirá a lista atual pelos 4 clientes de demonstração da SSD Soluções. Continuar?',
+        () => {
+          clients = getInitialDemoClients();
+          persistClients();
+          renderClients();
+          closeModal('settingsModal');
+          showToast('Clientes de demonstração restaurados!', 'info');
+        }
+      );
+    }
+
+    // Ponte Nativa AndroidInterface + Web Notification API + Toast
+    function triggerNotificationCheck(isManualTest = false) {
+      const urgent = clients.filter(c => getDaysDiff(c.dueDate) <= 0);
+      const soon = clients.filter(c => {
+        const d = getDaysDiff(c.dueDate);
+        return d > 0 && d <= 3;
+      });
+
+      const title = 'SSD Soluções - Vencimentos';
+      let body = '';
+
+      if (isManualTest) {
+        body = `Alerta de Teste: ${urgent.length} vencido(s)/hoje e ${soon.length} nos próximos 3 dias.`;
+      } else if (urgent.length > 0 || soon.length > 0) {
+        body = `Você tem ${urgent.length} cliente(s) vencido(s)/hoje e ${soon.length} vencendo nos próximos 3 dias.`;
+      } else {
+        return;
+      }
+
+      // 1. Ponte JavaScript nativa do Android WebView
+      if (window.AndroidInterface && typeof window.AndroidInterface.enviarNotificacao === 'function') {
+        window.AndroidInterface.enviarNotificacao(title, body);
+        if (isManualTest) showToast('Disparado via AndroidInterface!', 'success');
+        return;
+      }
+
+      // 2. Fallback para Web Notification API
+      if ('Notification' in window) {
+        if (Notification.permission === 'granted') {
+          new Notification(title, { body });
+        } else if (Notification.permission !== 'denied') {
+          Notification.requestPermission().then(perm => {
+            if (perm === 'granted') new Notification(title, { body });
+          });
+        }
+      }
+
+      // 3. Feedback visual Toast no navegador
+      if (isManualTest) {
+        showToast(`${title}: ${body}`, 'info');
+      }
+    }
+
+    // Exportar PDF (window.print)
+    function exportPDF() {
+      const now = new Date();
+      document.getElementById('printDate').textContent =
+        `Gerado em ${now.toLocaleDateString('pt-BR')} às ${now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} • Total: ${clients.length} cliente(s)`;
+      window.print();
+    }
+
+    // Toast visual não-intrusivo
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+
+      const colors = {
+        success: 'bg-emerald-950/95 border-emerald-500/60 text-emerald-100',
+        error: 'bg-rose-950/95 border-rose-500/60 text-rose-100',
+        info: 'bg-slate-900/95 border-blue-500/60 text-slate-100'
+      };
+
+      toast.className = `pointer-events-auto border ${colors[type] || colors.info} rounded-xl px-4 py-3 text-xs font-semibold shadow-xl backdrop-blur-md transition-all duration-300 transform translate-y-0 opacity-100`;
+      toast.textContent = message;
+
+      container.appendChild(toast);
+
+      setTimeout(() => {
+        toast.classList.add('opacity-0', '-translate-y-2');
+        setTimeout(() => toast.remove(), 300);
+      }, 3200);
+    }
+  </script>
+</body>
+</html>
+```

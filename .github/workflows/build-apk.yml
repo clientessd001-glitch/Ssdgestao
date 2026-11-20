@@ -19,9 +19,6 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Configurar Android SDK
-        uses: android-actions/setup-android@v3
-
       - name: Gerar APK Debug
         run: |
           gradle wrapper --gradle-version 8.2
